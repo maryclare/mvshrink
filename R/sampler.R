@@ -364,9 +364,82 @@ sample.uv <- function(old.v, sigma.sq.z,
 
 }
 
+#' Function for sampling from the posterior under multivariate normal, structured normal-gamma, structured power/bridge and structured product normal priors
+#' @name mcmc.ssp
+#' @description Function for sampling values of \eqn{beta} and possibly \eqn{Sigma} from the posterior distribution under multivariate normal, structured normal-gamma, structured power/bridge and structured product normal priors
+#'
+#'
+#' @usage
+#' samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior = "sno", num.samp = 100)
+#'
+#' @param X \eqn{n} by \eqn{t} by \eqn{r} array of covariate values, \eqn{y[i] = vec(X_i)'vec(B) + z[i], i = 1,...,n}
+#' @param y \eqn{n} by \eqn{1} response vector
+#' @param Sigma either a fixed \eqn{r} by \eqn{r} positive semidefinite covariance matrix (the provided \eqn{\Sigma} can always be used by the multivariate normal and SPN priors, but for the SNG and SPB priors, the provided value of \eqn{\Sigma} may not be achievable and the closest positive definite matrix will be used) or NULL, in which case values of \eqn{\Sigma} are resampled under either an inverse-Wishart prior for \eqn{\Sigma^{-1}}, or \eqn{\Sigma} is assumed to be diagonal with inverse-Wishart distributed elements or \eqn{\Sigma} is proportional to an identity matrix with inverse-gamma scale, the "str" parameter determines the prior used for \eqn{\Sigma}, prior hyperparameters given by the "pr.V.inv" and "pr.df" parameters
+#' @param sigma.sq positive constant, error variance
+#' @param prior string equal to "sno" for multivariate normal prior, "sng" for normal-gamma prior, "spb" for power/bridge prior, "spn" for normal product prior
+#' @param c positive constant, required when "sng" prior is used, default is NULL
+#' @param q positive constant, required when "spb" prior is used, default is NULL
+#' @param m positive constant, determines how \eqn{\Omega} and \eqn{\Psi} are constructed from \eqn{\Psi} when prior="spn" and \eqn{\Sigma} is provided and fixed, sets \eqn{\Psi=|\Sigma|^{1/m}} and \eqn{\Omega=sign(\Sigma)|\Sigma|^{(m - 1)/m}}
+#' @param num.samp integer; total number of posterior samples to return, defaults to 100
+#' @param burn.in integer; total number of posterior samples to discard, defaults to 1
+#' @param thin integer; number of posterior samples to be discarded between those returned, defaults to 0
+#' @param print.iter logical; if TRUE, the function prints a count of the number of samples from the posterior, defaults to FALSE
+#' @param str string equal to "uns", "het" or "con" which determines the prior used for Sigma. "con" forces \eqn{\Sigma} to be proportional to the identity matrix, "het" forces \eqn{\Sigma} to be diagonal, "str" allows \eqn{\Sigma} to have arbitrary structure
+#' @param pr.V.inv prior scale matrix for inverse-Wishart prior, set by default to \eqn{I_r}, if a diagonal \eqn{\Sigma} is used provide a diagonal matrix with the inverse-gamma rate parameters for each diagonal element of \eqn{\Sigma}, if \eqn{\Sigma \propto I_r} is used, provide the rate parameter for the inverse-gamma prior on the scale divided by r
+#' @param pr.df prior degrees of freedom for inverse-Wishart prior, set by default to \eqn{p + 2}, if a diagonal \eqn{\Sigma} is used provide the shape parameter for the inverse-gamma priors on the diagonal elements of \eqn{\Sigma}, if \eqn{\Sigma \propto I_r} is used provide the shape parameter for the inverse-gamma prior on the scale divided by r
+#' @source Based on the material in the working paper "Structured Shrinkage Priors"
+#' @examples
+#'
+#' set.seed(1)
+#' library(RColorBrewer)
+#' # Simulate some data
+#' n <- 20; t <- 5; r <- 2
+#' X <- array(rnorm(n*t*r), dim = c(n, t, r))
+#' Sigma <- (1 - 0.5)*diag(r) + 0.5*diag(r)
+#' beta <- c(matrix(rnorm(t*r), nrow = t, ncol = r)%*%chol(Sigma))
+#' y <- t(apply(X, 1, "c"))%*%beta + rnorm(n)
+#'
+#' # Fit a few models to this data, first fixing Sigma then not
+#' mvn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "sno")
+#' spn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spn", m = 2)
+#' sng.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "sng", c = 1)
+#' spb.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spb", q = 1)
+#'
+#' # Take a look at some trace plots, compare very small sample posterior means
+#' par(mfrow = c(2, 2))
+#' plot(mvn.fs$betas[, 1], xlab = "", ylab = expression(beta[1]))
+#' plot(spn.fs$betas[, 1], xlab = "", ylab = "")
+#' plot(sng.fs$betas[, 1], xlab = "Sample", ylab = expression(beta[1]))
+#' plot(spb.fs$betas[, 1], xlab = "Sample", ylab = "")
+#'
+#' par(mfrow = c(1, 3))
+#' plot(colMeans(mvn.fs$betas), colMeans(spn.fs$betas), xlab = "MVN", ylab = "SPN")
+#' abline(a = 0, b = 1, lty = 2)
+#' plot(colMeans(mvn.fs$betas), colMeans(sng.fs$betas), xlab = "MVN", ylab = "SNG")
+#' abline(a = 0, b = 1, lty = 2)
+#' plot(colMeans(mvn.fs$betas), colMeans(spb.fs$betas), xlab = "MVN", ylab = "SPB")
+#' abline(a = 0, b = 1, lty = 2)
+#'
+#' mvn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "sno", str = "uns")
+#' spn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "spn", str = "uns")
+#' sng.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "sng", str = "uns", c = 1)
+#' spb.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "spb", str = "uns", q = 1)
+#'
+#' # Plot covariance matrix posterior means
+#' cols <- brewer.pal(11, "RdBu")
+#' cols <- cols[length(cols):1]
+#' breaks <- seq(-1, 1, length.out = 12)
+#' par(mfrow = c(2, 2))
+#' image(matrix(rowMeans(apply(mvn.vs$Sigmas, 1, function(x) {cov2cor(x)})), nrow = r, ncol = r)[r:1, r:1], breaks = breaks, col = cols, main = "MVN")
+#' image(matrix(rowMeans(apply(spn.vs$Sigmas, 1, function(x) {cov2cor(x)})), nrow = r, ncol = r)[r:1, r:1], breaks = breaks, col = cols, main = "SPN")
+#' image(matrix(rowMeans(apply(sng.vs$Sigmas, 1, function(x) {cov2cor(x)})), nrow = r, ncol = r)[r:1, r:1], breaks = breaks, col = cols, main = "SNG")
+#' image(matrix(rowMeans(apply(spb.vs$Sigmas, 1, function(x) {cov2cor(x)})), nrow = r, ncol = r)[r:1, r:1], breaks = breaks, col = cols, main = "SPB")
+#'
 #' @export
 mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m = 2,
-                     num.samp, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns") {
+                     num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
+                     pr.V.inv = diag(dim(X)[3]),
+                     pr.df = dim(X)[3] + 2) {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
   # correlation along r dimension
@@ -450,10 +523,12 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       }
 
       if (is.null(Sigma)) {
-        Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r))
+        Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r),
+                                    pr.V.inv = pr.V.inv,
+                                    pr.df = pr.df)
         Omega <- solve(Omega.inv)
         if (i > burn.in & (i - burn.in)%%thin == 0) {
-          Sigmas[(i - burn.in)/thin, , ] <- cov2cor(Omega*els)
+          Sigmas[(i - burn.in)/thin, , ] <- Omega*els
         }
         Omega <- Omega%x%diag(t)           # There isn't a way around doing this directly
         Omega.inv <- Omega.inv%x%diag(t)   # There isn't a way around doing this directly
@@ -465,12 +540,14 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       s <- uv[, 2]
 
       if (is.null(Sigma)) {
-        Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r), str = str)
+        Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r), str = str,
+                                    pr.V.inv = pr.V.inv,
+                                    pr.df = pr.df)
         Omega <- solve(Omega.inv)
         Psi.inv <- samp.Omega.inv(Beta = matrix(s, nrow = t, ncol = r), str = str)
         Psi <- solve(Psi.inv)
         if (i > burn.in & (i - burn.in)%%thin == 0) {
-          Sigmas[(i - burn.in)/thin, , ] <- cov2cor(Omega*Psi)
+          Sigmas[(i - burn.in)/thin, , ] <- Omega*Psi
         }
         Omega <- Omega%x%diag(t)           # There isn't a way around doing this directly
         Omega.inv <- Omega.inv%x%diag(t)   # There isn't a way around doing this directly
