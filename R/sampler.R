@@ -594,8 +594,8 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
 
     if (null.sigma.sq) {
-      r <- y - crossprod(t(Z), beta)
-      sigma.sq <- 1/rgamma(1, shape = pr.shape + length(r)/2, rate = pr.rate + sum(r^2)/2)
+      res <- y - crossprod(t(Z), beta)
+      sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
     }
 
     s.old <- s
