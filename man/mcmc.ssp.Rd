@@ -48,7 +48,7 @@ Function for sampling values of \eqn{beta} and possibly \eqn{Sigma} from the pos
 set.seed(1)
 library(RColorBrewer)
 # Simulate some data
-n <- 20; t <- 5; r <- 2
+n <- 30; t <- 5; r <- 4
 X <- array(rnorm(n*t*r), dim = c(n, t, r))
 Sigma <- (1 - 0.5)*diag(r) + 0.5*diag(r)
 beta <- c(matrix(rnorm(t*r), nrow = t, ncol = r)\%*\%chol(Sigma))

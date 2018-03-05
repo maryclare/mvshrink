@@ -248,16 +248,41 @@ samp.s.sq <- function(beta, Omega.inv, c, d, s.sq) {
     chi <- ifelse(chi < 10^(-14), 10^(-14), chi)
     psi <- 2*d
 
-    lim <- get.lim(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)
+    # lim <- get.lim(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)
     # cat(ifelse(lim[["ul"]] == "u", "upper= ", "lower= "), lim[["lim"]], "\n")
     # cat("lambda = ", lambda, "\n")
     # cat("chi = ", chi, "\n")
     # cat("psi = ", psi, "\n")
-    if (lim[["ul"]] == "l") {
-      s.sq[j] <- rgiglt(1, lambda = lambda, chi = chi, psi = psi, lower = lim[["lim"]]^2)
-    } else if (lim[["ul"]] == "u") {
-      s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
+    # if (lim[["ul"]] == "l") {
+    #   s.sq[j] <- rgiglt(1, lambda = lambda, chi = chi, psi = psi, lower = lim[["lim"]]^2)
+    # } else if (lim[["ul"]] == "u") {
+    #   s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
+    # }
+
+    s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
+    while (!check.cond(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)) {
+      s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
     }
+
+    # cat("s.sq[j]=", s.sq[j], "\n")
+    # if (lim[["ul"]] == "l") {
+    #   if (lambda == 0 & chi < 10^(-6)) {
+    #     s.sq[j] <- rexp(1, rate = psi/2)
+    #     while (!check.cond(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)) {
+    #       s.sq[j] <- rexp(1, rate = psi/2)
+    #     }
+    #   } else {
+    #     s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
+    #     while (!check.cond(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)) {
+    #       s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
+    #     }
+    #   }
+    # } else {
+    #
+    #   s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
+    #
+    # }
+
     # cat("s.sq[j]=", s.sq[j], "\n")
     # if (lim[["ul"]] == "l") {
     #   if (lambda == 0 & chi < 10^(-6)) {
@@ -393,7 +418,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' set.seed(1)
 #' library(RColorBrewer)
 #' # Simulate some data
-#' n <- 20; t <- 5; r <- 2
+#' n <- 30; t <- 5; r <- 4
 #' X <- array(rnorm(n*t*r), dim = c(n, t, r))
 #' Sigma <- (1 - 0.5)*diag(r) + 0.5*diag(r)
 #' beta <- c(matrix(rnorm(t*r), nrow = t, ncol = r)%*%chol(Sigma))
