@@ -81,7 +81,7 @@ rgiglt <- function(p, lambda, chi, psi, lower) {
 
     # I tried adding a step that checks that the pr(accept) under rejection sampler > the
     # pr(accept) under naive sampler.  Seems to help!
-    # if (TRUE) {
+    if (TRUE) {
     if (M.max != 0 & 1/M.max > 1) {
 
       z <- rexp(1, alpha.max) + lower[i]
@@ -253,22 +253,22 @@ samp.s.sq <- function(beta, Omega.inv, c, d, s.sq) {
     # cat("lambda = ", lambda, "\n")
     # cat("chi = ", chi, "\n")
     # cat("psi = ", psi, "\n")
-    # if (lim[["ul"]] == "l") {
-    #   s.sq[j] <- rgiglt(1, lambda = lambda, chi = chi, psi = psi, lower = lim[["lim"]]^2)
-    # } else if (lim[["ul"]] == "u") {
-    #   s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
-    # }
-
     if (lim[["ul"]] == "l") {
-      s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
-      while (!check.cond(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)) {
-        s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
-      }
-    } else {
-
+      s.sq[j] <- rgiglt(1, lambda = lambda, chi = chi, psi = psi, lower = lim[["lim"]]^2)
+    } else if (lim[["ul"]] == "u") {
       s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
-
     }
+
+    # if (lim[["ul"]] == "l") {
+    #   s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
+    #   while (!check.cond(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)) {
+    #     s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
+    #   }
+    # } else {
+    #
+    #   s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
+    #
+    # }
 
     # cat("s.sq[j]=", s.sq[j], "\n")
     # if (lim[["ul"]] == "l") {
