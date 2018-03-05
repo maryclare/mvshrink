@@ -532,7 +532,8 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       Psi <- Psi.inv <- diag(r*t)
     }
   }
-  if (is.null(sigma.sq)) {
+  null.sigma.sq <- is.null(sigma.sq)
+  if (null.sigma.sq) {
     sigma.sq <- 1
   }
   betas <- matrix(nrow = num.samp, ncol = ncol(Z))
@@ -592,7 +593,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       }
     }
 
-    if (is.null(sigma.sq)) {
+    if (null.sigma.sq) {
       r <- y - crossprod(t(Z), beta)
       sigma.sq <- 1/rgamma(1, shape = pr.shape + length(r)/2, rate = pr.rate + sum(r^2)/2)
     }
