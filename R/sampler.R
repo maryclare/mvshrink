@@ -259,9 +259,15 @@ samp.s.sq <- function(beta, Omega.inv, c, d, s.sq) {
     #   s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
     # }
 
-    s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
-    while (!check.cond(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)) {
+    if (lim[["ul"]] == "l") {
       s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
+      while (!check.cond(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)) {
+        s.sq[j] <- rgig(1, lambda = lambda, chi = chi, psi = psi)
+      }
+    } else {
+
+      s.sq[j] <- rgigrt(1, lambda = lambda, chi = chi, psi = psi, upper = lim[["lim"]]^2)
+
     }
 
     # cat("s.sq[j]=", s.sq[j], "\n")
