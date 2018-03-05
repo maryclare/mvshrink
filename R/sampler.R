@@ -248,7 +248,7 @@ samp.s.sq <- function(beta, Omega.inv, c, d, s.sq) {
     chi <- ifelse(chi < 10^(-14), 10^(-14), chi)
     psi <- 2*d
 
-    # lim <- get.lim(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)
+    lim <- get.lim(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)
     # cat(ifelse(lim[["ul"]] == "u", "upper= ", "lower= "), lim[["lim"]], "\n")
     # cat("lambda = ", lambda, "\n")
     # cat("chi = ", chi, "\n")
