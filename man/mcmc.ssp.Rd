@@ -39,6 +39,10 @@ samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior =
 \item{pr.V.inv}{prior scale matrix for inverse-Wishart prior, set by default to \eqn{I_r}, if a diagonal \eqn{\Sigma} is used provide a diagonal matrix with the inverse-gamma rate parameters for each diagonal element of \eqn{\Sigma}, if \eqn{\Sigma \propto I_r} is used, provide the rate parameter for the inverse-gamma prior on the scale divided by r}
 
 \item{pr.df}{prior degrees of freedom for inverse-Wishart prior, set by default to \eqn{p + 2}, if a diagonal \eqn{\Sigma} is used provide the shape parameter for the inverse-gamma priors on the diagonal elements of \eqn{\Sigma}, if \eqn{\Sigma \propto I_r} is used provide the shape parameter for the inverse-gamma prior on the scale divided by r}
+
+\item{pr.shape}{prior shape parameter for inverse-gamma prior on the noise variance, set to 3/2 by default}
+
+\item{pr.rate}{prior rate parameter for inverse-gamma prior on the noise variance, set to 1/2 by default}
 }
 \description{
 Function for sampling values of \eqn{beta} and possibly \eqn{Sigma} from the posterior distribution under multivariate normal, structured normal-gamma, structured power/bridge and structured product normal priors
@@ -75,10 +79,10 @@ abline(a = 0, b = 1, lty = 2)
 plot(colMeans(mvn.fs$betas), colMeans(spb.fs$betas), xlab = "MVN", ylab = "SPB")
 abline(a = 0, b = 1, lty = 2)
 
-mvn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "sno", str = "uns")
-spn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "spn", str = "uns")
-sng.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "sng", str = "uns", c = 1)
-spb.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "spb", str = "uns", q = 1)
+mvn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "sno", str = "uns")
+spn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "spn", str = "uns")
+sng.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "sng", str = "uns", c = 1)
+spb.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "spb", str = "uns", q = 1)
 
 # Plot covariance matrix posterior means
 cols <- brewer.pal(11, "RdBu")

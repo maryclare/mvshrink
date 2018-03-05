@@ -244,7 +244,7 @@ samp.s.sq <- function(beta, Omega.inv, c, d, s.sq) {
     lambda <- c - 1/2
     chi <- beta[j]^2*Omega.inv[j, j]
     # Check numerical isssue
-    chi <- ifelse(chi < 10^(-14), 10^(-14), chi)
+    chi <- ifelse(chi < 10^(-14), 10^(-14), chi) # rgig gives values of infinity for chi < 10^(-14)
     psi <- 2*d
 
     lim <- get.lim(u = u, beta = beta, Omega.inv, s.sq = s.sq, j = j)
@@ -417,6 +417,8 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' @param str string equal to "uns", "het" or "con" which determines the prior used for Sigma. "con" forces \eqn{\Sigma} to be proportional to the identity matrix, "het" forces \eqn{\Sigma} to be diagonal, "str" allows \eqn{\Sigma} to have arbitrary structure
 #' @param pr.V.inv prior scale matrix for inverse-Wishart prior, set by default to \eqn{I_r}, if a diagonal \eqn{\Sigma} is used provide a diagonal matrix with the inverse-gamma rate parameters for each diagonal element of \eqn{\Sigma}, if \eqn{\Sigma \propto I_r} is used, provide the rate parameter for the inverse-gamma prior on the scale divided by r
 #' @param pr.df prior degrees of freedom for inverse-Wishart prior, set by default to \eqn{p + 2}, if a diagonal \eqn{\Sigma} is used provide the shape parameter for the inverse-gamma priors on the diagonal elements of \eqn{\Sigma}, if \eqn{\Sigma \propto I_r} is used provide the shape parameter for the inverse-gamma prior on the scale divided by r
+#' @param pr.shape prior shape parameter for inverse-gamma prior on the noise variance, set to 3/2 by default
+#' @param pr.rate prior rate parameter for inverse-gamma prior on the noise variance, set to 1/2 by default
 #' @source Based on the material in the working paper "Structured Shrinkage Priors"
 #' @examples
 #'
@@ -450,10 +452,10 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' plot(colMeans(mvn.fs$betas), colMeans(spb.fs$betas), xlab = "MVN", ylab = "SPB")
 #' abline(a = 0, b = 1, lty = 2)
 #'
-#' mvn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "sno", str = "uns")
-#' spn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "spn", str = "uns")
-#' sng.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "sng", str = "uns", c = 1)
-#' spb.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = 1, prior = "spb", str = "uns", q = 1)
+#' mvn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "sno", str = "uns")
+#' spn.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "spn", str = "uns")
+#' sng.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "sng", str = "uns", c = 1)
+#' spb.vs <- mcmc.ssp(X = X, y = y, Sigma = NULL, sigma.sq = NULL, prior = "spb", str = "uns", q = 1)
 #'
 #' # Plot covariance matrix posterior means
 #' cols <- brewer.pal(11, "RdBu")
@@ -469,7 +471,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m = 2,
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
-                     pr.df = dim(X)[3] + 2) {
+                     pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2) {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
   # correlation along r dimension
@@ -530,9 +532,13 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       Psi <- Psi.inv <- diag(r*t)
     }
   }
+  if (is.null(sigma.sq)) {
+    sigma.sq <- 1
+  }
   betas <- matrix(nrow = num.samp, ncol = ncol(Z))
   ss <- matrix(1, nrow = num.samp, ncol = ncol(Z))
   Sigmas <- array(NA, dim = c(num.samp, r, r))
+  sigma.sqs <- numeric(num.samp)
   s.old <- rep(1, ncol(Z))
 
   for (i in 1:(burn.in + thin*num.samp)) {
@@ -586,14 +592,20 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       }
     }
 
+    if (is.null(sigma.sq)) {
+      r <- y - crossprod(t(Z), beta)
+      sigma.sq <- 1/rgamma(1, shape = pr.shape + length(r)/2, rate = pr.rate + sum(r^2)/2)
+    }
+
     s.old <- s
     if (i > burn.in & (i - burn.in)%%thin == 0) {
       betas[(i - burn.in)/thin, ] <- beta
       ss[(i - burn.in)/thin, ] <- s
+      sigma.sqs[(i - burn.in)/thin] <- sigma.sq
     }
   }
 
-  return(list("betas" = betas, "ss" = ss, "Sigmas" = Sigmas))
+  return(list("betas" = betas, "ss" = ss, "Sigmas" = Sigmas, "sigma.sqs" = sigma.sqs))
 
 }
 
