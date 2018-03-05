@@ -81,7 +81,6 @@ rgiglt <- function(p, lambda, chi, psi, lower) {
 
     # I tried adding a step that checks that the pr(accept) under rejection sampler > the
     # pr(accept) under naive sampler.  Seems to help!
-    if (TRUE) {
     if (M.max != 0 & 1/M.max > 1) {
 
       z <- rexp(1, alpha.max) + lower[i]
