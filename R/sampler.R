@@ -547,11 +547,11 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
   }
   null.sigma.sq <- is.null(sigma.sq)
-  if (null.sigma.sq | reg == "logit") {
-    sigma.sq <- 1
-  } else if (null.sigma.sq & reg == "linear") {
+  if (null.sigma.sq & reg == "linear") {
     sigma.sq <- diag(p)
     sigma.sq.inv <- solve(sigma.sq)
+  } else if (null.sigma.sq | reg == "logit") {
+    sigma.sq <- 1
   }
 
   # Set up data
