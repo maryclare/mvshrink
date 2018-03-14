@@ -595,7 +595,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       WtW <- as.matrix(crossprod(W, crossprod(diag(ome), W)))
       ZtW <- as.matrix(crossprod(Z, crossprod(diag(ome), W))); WtZ <- t(ZtW)
       Wty <- as.matrix(crossprod(W, y - rep(1/2, n)))
-    } else if (reg == "linear" & p > 1 & is.null(sigma.sq)) {
+    } else if (reg == "linear" & p > 1 & null.sigma.sq) {
       ZtZ <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), Z))
       Zty <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), y - rep(1/2, n)))
       WtW <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), W)))
@@ -624,7 +624,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
                           Omega.inv = Omega.inv/tau^2, sig.sq = sigma.sq)
       }
       if (prior == "sng") {
-        s <- sqrt(samp.s.sq(beta = beta, Omega.inv = Omega.inv, c = c,
+        s <- sqrt(samp.s.sq(beta = c(beta), Omega.inv = Omega.inv, c = c,
                             d = c, s.sq = s.old^2))
       } else if (prior == "spb") {
         s <- sqrt(samp.s.sq.bridge(beta, Omega.inv = Omega.inv/tau^2, q = q,
