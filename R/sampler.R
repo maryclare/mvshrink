@@ -553,6 +553,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     sigma.sq <- 1
   }
 
+  fits <- matrix(NA, nrow = num.samp, ncol = n)
   deltas <- matrix(0, nrow = num.samp, ncol = ncol(W))
   betas <- matrix(nrow = num.samp, ncol = ncol(Z))
   ss <- matrix(1, nrow = num.samp, ncol = ncol(Z))
@@ -633,27 +634,32 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       }
     }
 
-    if (null.sigma.sq) {
-      fit <- crossprod(t(Z), beta) + crossprod(t(W), delta)
+    s.old <- s
+
+    fit <- crossprod(t(Z), beta) + crossprod(t(W), delta)
+
+    if (null.sigma.sq & reg == "linear") {
+
       res <- y - fit
-      if (reg == "linear") {
-        sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
-      } else if (reg == "logit") {
-        ome <- rpg(fit, rep(1, length(fit)), fit)
-      }
+      sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
+
     }
 
-    s.old <- s
+    if (reg == "logit") {
+      ome <- rpg(fit, rep(1, length(fit)), fit)
+    }
+
     if (i > burn.in & (i - burn.in)%%thin == 0) {
       betas[(i - burn.in)/thin, ] <- beta
       deltas[(i - burn.in)/thin, ] <- delta
       ss[(i - burn.in)/thin, ] <- s
+      fits[(i - burn.in)/thin, ] <- fit
       sigma.sqs[(i - burn.in)/thin] <- sigma.sq
     }
   }
 
   return(list("betas" = betas, "ss" = ss, "Sigmas" = Sigmas, "sigma.sqs" = sigma.sqs,
-              "deltas" = deltas))
+              "deltas" = deltas, "fits" = fits))
 
 }
 
