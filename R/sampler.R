@@ -484,6 +484,10 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   n <- dim(X)[1]
   t <- dim(X)[2]
   r <- dim(X)[3]
+  null.W <- is.null(W)
+  if (null.W) {
+    W <- matrix(0, nrow = n, ncol = 1)
+  }
   l <- dim(W)[2]
 
   # Set up data
@@ -546,7 +550,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     sigma.sq <- 1
   }
 
-  deltas <- matrix(nrow = num.samp, ncol = ncol(W))
+  deltas <- matrix(0, nrow = num.samp, ncol = ncol(W))
   betas <- matrix(nrow = num.samp, ncol = ncol(Z))
   ss <- matrix(1, nrow = num.samp, ncol = ncol(Z))
   Sigmas <- array(NA, dim = c(num.samp, r, r))
@@ -558,9 +562,10 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
 
     if (print.iter) {cat("i=", i, "\n")}
 
-
-    delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
-                      Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
+    if (!null.W) {
+      delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
+                         Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
+    }
 
 
     if (prior != "spn") {
