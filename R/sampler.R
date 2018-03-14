@@ -482,11 +482,12 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
                      pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL,
-                     reg = "linear", pr.ssqi.V.inv = diag(dim(as.matrix(y)[2])),
+                     reg = "linear", pr.ssqi.V.inv = diag(dim(as.matrix(y))[2]),
                      pr.ssqi.df = dim(as.matrix(y))[2] + 2, str.ssqi = "uns") {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
   # correlation along r dimension
+  pr.ssqi.V.inv <- pr.ssqi.V.inv # Weirdly this is needed here to "initialize" pr.ssqi.V.inv before making y a vector
 
   n <- dim(X)[1]
   t <- dim(X)[2]
@@ -500,6 +501,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   if (null.W) {
     W <- matrix(0, nrow = n, ncol = 1)
   }
+
   l <- dim(W)[2]
 
   # Transform Sigma to Omega, prep parameters for different priors
@@ -634,7 +636,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
         s <- rep(1, ncol(Z))
       }
 
-      if (is.null(Sigma)) {
+      if (null.Sigma) {
         Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r),
                                     pr.V.inv = pr.V.inv,
                                     pr.df = pr.df)
