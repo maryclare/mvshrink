@@ -576,7 +576,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   betas <- matrix(nrow = num.samp, ncol = ncol(Z))
   ss <- matrix(1, nrow = num.samp, ncol = ncol(Z))
   Sigmas <- array(NA, dim = c(num.samp, r, r))
-  sigma.sqs <- array(dim = c(num.samp, m, m))
+  sigma.sqs <- array(dim = c(num.samp, p, p))
   s.old <- rep(1, ncol(Z))
   beta <- rep(0, ncol(Z))
   delta <- rep(0, l)
