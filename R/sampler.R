@@ -565,6 +565,8 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     if (!null.W) {
       delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
                          Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
+    } else {
+      delta <- rep(0, l)
     }
 
 
