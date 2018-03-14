@@ -646,7 +646,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
 
     if (reg == "logit") {
-      ome <- rpg(fit, rep(1, length(fit)), fit)
+      ome <- rpg(n, rep(1, n), fit)
     }
 
     if (i > burn.in & (i - burn.in)%%thin == 0) {
