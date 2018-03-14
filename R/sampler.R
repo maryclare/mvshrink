@@ -408,7 +408,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior = "sno", num.samp = 100)
 #'
 #' @param X \eqn{n} by \eqn{t} by \eqn{r} array of covariate values, \eqn{y[i] = vec(X_i)'vec(B) + z[i], i = 1,...,n}
-#' @param y \eqn{n} by \eqn{1} response vector
+#' @param y \eqn{n} by \eqn{1} response vector or \eqn{m} by \eqn{p} response matrix (if matrix, require \eqn{mp=n})
 #' @param Sigma either a fixed \eqn{r} by \eqn{r} positive semidefinite covariance matrix (the provided \eqn{\Sigma} can always be used by the multivariate normal and SPN priors, but for the SNG and SPB priors, the provided value of \eqn{\Sigma} may not be achievable and the closest positive definite matrix will be used) or NULL, in which case values of \eqn{\Sigma} are resampled under either an inverse-Wishart prior for \eqn{\Sigma^{-1}}, or \eqn{\Sigma} is assumed to be diagonal with inverse-Wishart distributed elements or \eqn{\Sigma} is proportional to an identity matrix with inverse-gamma scale, the "str" parameter determines the prior used for \eqn{\Sigma}, prior hyperparameters given by the "pr.V.inv" and "pr.df" parameters
 #' @param sigma.sq positive constant, error variance
 #' @param prior string equal to "sno" for multivariate normal prior, "sng" for normal-gamma prior, "spb" for power/bridge prior, "spn" for normal product prior
@@ -426,6 +426,9 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' @param pr.rate prior rate parameter for inverse-gamma prior on the noise variance, set to 1/2 by default
 #' @param W \eqn{n} by \eqn{l} matrix of unpenalized covariates to include in regression
 #' @param reg string equal to "linear" for linear regression, "logit" for logistic regression
+#' @param pr.ssqi.V.inv If y has matrix structure, this is the scale matrix for an inverse wishart prior on column covariance matrix
+#' @param pr.ssqi.df If y has matrix structure, this is the scale matrix for an inverse wishart on column covariance matrix
+#' @param str.ssqi Structure to be used for covariance matrix of columns of Y
 #' @source Based on the material in the working paper "Structured Shrinkage Priors"
 #' @examples
 #'
@@ -479,7 +482,8 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
                      pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL,
-                     reg = "linear") {
+                     reg = "linear", pr.ssqi.V.inv = diag(dim(as.matrix(y))[2]),
+                     pr.ssqi.df = dim(as.matrix(y))[2] + 2, str.ssqi = "uns") {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
   # correlation along r dimension
@@ -487,20 +491,14 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   n <- dim(X)[1]
   t <- dim(X)[2]
   r <- dim(X)[3]
+  m <- dim(as.matrix(y))[1]
+  p <- dim(as.matrix(y))[2]
+  y <- c(y)
   null.W <- is.null(W)
   if (null.W) {
     W <- matrix(0, nrow = n, ncol = 1)
   }
   l <- dim(W)[2]
-
-  # Set up data
-  Z <- t(apply(X, 1, "c"))
-
-  ZtZ <- crossprod(Z)
-  Zty <- crossprod(Z, y)
-  WtW <- as.matrix(crossprod(W))
-  ZtW <- as.matrix(crossprod(Z, W)); WtZ <- t(ZtW)
-  Wty <- as.matrix(crossprod(W, y))
 
   # Transform Sigma to Omega, prep parameters for different priors
   if (prior != "spn") {
@@ -551,6 +549,26 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   null.sigma.sq <- is.null(sigma.sq)
   if (null.sigma.sq | reg == "logit") {
     sigma.sq <- 1
+  } else if (null.sigma.sq & reg == "linear") {
+    sigma.sq <- diag(p)
+    sigma.sq.inv <- solve(sigma.sq)
+  }
+
+  # Set up data
+  Z <- t(apply(X, 1, "c"))
+
+  if (reg == "linear" & m > 1) {
+    ZtZ <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), Z))
+    Zty <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), y - rep(1/2, n)))
+    WtW <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), W)))
+    ZtW <- as.matrix(crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), W))); WtZ <- t(ZtW)
+    Wty <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), y - rep(1/2, n))))
+  } else {
+    ZtZ <- crossprod(Z)
+    Zty <- crossprod(Z, y)
+    WtW <- as.matrix(crossprod(W))
+    ZtW <- as.matrix(crossprod(Z, W)); WtZ <- t(ZtW)
+    Wty <- as.matrix(crossprod(W, y))
   }
 
   fits <- matrix(NA, nrow = num.samp, ncol = n)
@@ -558,7 +576,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   betas <- matrix(nrow = num.samp, ncol = ncol(Z))
   ss <- matrix(1, nrow = num.samp, ncol = ncol(Z))
   Sigmas <- array(NA, dim = c(num.samp, r, r))
-  sigma.sqs <- numeric(num.samp)
+  sigma.sqs <- array(dim = c(num.samp, m, m))
   s.old <- rep(1, ncol(Z))
   beta <- rep(0, ncol(Z))
   delta <- rep(0, l)
@@ -577,18 +595,34 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       WtW <- as.matrix(crossprod(W, crossprod(diag(ome), W)))
       ZtW <- as.matrix(crossprod(Z, crossprod(diag(ome), W))); WtZ <- t(ZtW)
       Wty <- as.matrix(crossprod(W, y - rep(1/2, n)))
+    } else if (reg == "linear" & m > 1 & is.null(sigma.sq)) {
+      ZtZ <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), Z))
+      Zty <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), y - rep(1/2, n)))
+      WtW <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), W)))
+      ZtW <- as.matrix(crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), W))); WtZ <- t(ZtW)
+      Wty <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), y - rep(1/2, n))))
     }
 
     if (!null.W) {
-      delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
-                         Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
+      if (reg == "linear" & m > 1) {
+        delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
+                           Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = 1)
+      } else {
+        delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
+                           Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
+      }
     }
 
 
     if (prior != "spn") {
 
-      beta <- samp.beta(XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta), s.sq = s.old^2,
-                        Omega.inv = Omega.inv/tau^2, sig.sq = sigma.sq)
+      if (reg == "linear" & m > 1) {
+        beta <- samp.beta(XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta), s.sq = s.old^2,
+                          Omega.inv = Omega.inv/tau^2, sig.sq = 1)
+      } else {
+        beta <- samp.beta(XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta), s.sq = s.old^2,
+                          Omega.inv = Omega.inv/tau^2, sig.sq = sigma.sq)
+      }
       if (prior == "sng") {
         s <- sqrt(samp.s.sq(beta = beta, Omega.inv = Omega.inv, c = c,
                             d = c, s.sq = s.old^2))
@@ -602,7 +636,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       if (is.null(Sigma)) {
         Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r),
                                     pr.V.inv = pr.V.inv,
-                                    pr.df = pr.df)
+                                    pr.df = pr.df, str = str)
         Omega <- solve(Omega.inv)
         if (i > burn.in & (i - burn.in)%%thin == 0) {
           Sigmas[(i - burn.in)/thin, , ] <- Omega*els
@@ -612,8 +646,13 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       }
     } else {
 
-      uv <- sample.uv(old.v = s.old, sigma.sq.z = sigma.sq, Sigma.u.inv = Omega.inv,
-                      Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta))
+      if (reg == "linear" & m > 1) {
+        uv <- sample.uv(old.v = s.old, sigma.sq.z = 1, Sigma.u.inv = Omega.inv,
+                        Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta))
+      } else {
+        uv <- sample.uv(old.v = s.old, sigma.sq.z = sigma.sq, Sigma.u.inv = Omega.inv,
+                        Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta))
+      }
       beta <- uv[, 1]*uv[, 2]
       s <- uv[, 2]
 
@@ -641,8 +680,15 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     if (null.sigma.sq & reg == "linear") {
 
       res <- y - fit
-      sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
+      if (m == 1) {
+        sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
 
+      } else {
+        sigma.sq.inv <- samp.Omega.inv(Beta = matrix(res, nrow = m, ncol = p),
+                                       pr.V.inv = pr.ssqi.V.inv,
+                                       pr.df = pr.ssqi.df, str = str.ssqi)
+        sigma.sq <- solve(sigma.sq.inv)
+      }
     }
 
     if (reg == "logit") {
@@ -654,7 +700,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       deltas[(i - burn.in)/thin, ] <- delta
       ss[(i - burn.in)/thin, ] <- s
       fits[(i - burn.in)/thin, ] <- fit
-      sigma.sqs[(i - burn.in)/thin] <- sigma.sq
+      sigma.sqs[(i - burn.in)/thin, , ] <- sigma.sq
     }
   }
 

@@ -12,7 +12,7 @@ samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior =
 \arguments{
 \item{X}{\eqn{n} by \eqn{t} by \eqn{r} array of covariate values, \eqn{y[i] = vec(X_i)'vec(B) + z[i], i = 1,...,n}}
 
-\item{y}{\eqn{n} by \eqn{1} response vector}
+\item{y}{\eqn{n} by \eqn{1} response vector or \eqn{m} by \eqn{p} response matrix (if matrix, require \eqn{mp=n})}
 
 \item{Sigma}{either a fixed \eqn{r} by \eqn{r} positive semidefinite covariance matrix (the provided \eqn{\Sigma} can always be used by the multivariate normal and SPN priors, but for the SNG and SPB priors, the provided value of \eqn{\Sigma} may not be achievable and the closest positive definite matrix will be used) or NULL, in which case values of \eqn{\Sigma} are resampled under either an inverse-Wishart prior for \eqn{\Sigma^{-1}}, or \eqn{\Sigma} is assumed to be diagonal with inverse-Wishart distributed elements or \eqn{\Sigma} is proportional to an identity matrix with inverse-gamma scale, the "str" parameter determines the prior used for \eqn{\Sigma}, prior hyperparameters given by the "pr.V.inv" and "pr.df" parameters}
 
@@ -47,6 +47,12 @@ samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior =
 \item{W}{\eqn{n} by \eqn{l} matrix of unpenalized covariates to include in regression}
 
 \item{reg}{string equal to "linear" for linear regression, "logit" for logistic regression}
+
+\item{pr.ssqi.V.inv}{If y has matrix structure, this is the scale matrix for an inverse wishart prior on column covariance matrix}
+
+\item{pr.ssqi.df}{If y has matrix structure, this is the scale matrix for an inverse wishart on column covariance matrix}
+
+\item{str.ssqi}{Structure to be used for covariance matrix of columns of Y}
 }
 \description{
 Function for sampling values of \eqn{beta} and possibly \eqn{Sigma} from the posterior distribution under multivariate normal, structured normal-gamma, structured power/bridge and structured product normal priors
