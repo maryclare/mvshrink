@@ -680,7 +680,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     if (null.sigma.sq & reg == "linear") {
 
       res <- y - fit
-      if (m == 1) {
+      if (p == 1) {
         sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
 
       } else {
