@@ -557,6 +557,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   sigma.sqs <- numeric(num.samp)
   s.old <- rep(1, ncol(Z))
   beta <- rep(0, ncol(Z))
+  delta <- rep(0, ncol(W))
 
   for (i in 1:(burn.in + thin*num.samp)) {
 
@@ -565,8 +566,6 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     if (!null.W) {
       delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
                          Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
-    } else {
-      delta <- rep(0, l)
     }
 
 
