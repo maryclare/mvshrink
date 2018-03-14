@@ -557,7 +557,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   # Set up data
   Z <- t(apply(X, 1, "c"))
 
-  if (reg == "linear" & m > 1) {
+  if (reg == "linear" & p > 1) {
     ZtZ <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), Z))
     Zty <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), y - rep(1/2, n)))
     WtW <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), W)))
@@ -595,7 +595,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       WtW <- as.matrix(crossprod(W, crossprod(diag(ome), W)))
       ZtW <- as.matrix(crossprod(Z, crossprod(diag(ome), W))); WtZ <- t(ZtW)
       Wty <- as.matrix(crossprod(W, y - rep(1/2, n)))
-    } else if (reg == "linear" & m > 1 & is.null(sigma.sq)) {
+    } else if (reg == "linear" & p > 1 & is.null(sigma.sq)) {
       ZtZ <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), Z))
       Zty <- crossprod(Z, crossprod(sigma.sq.inv%x%diag(m), y - rep(1/2, n)))
       WtW <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), W)))
@@ -604,7 +604,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
 
     if (!null.W) {
-      if (reg == "linear" & m > 1) {
+      if (reg == "linear" & p > 1) {
         delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
                            Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = 1)
       } else {
@@ -616,7 +616,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
 
     if (prior != "spn") {
 
-      if (reg == "linear" & m > 1) {
+      if (reg == "linear" & p > 1) {
         beta <- samp.beta(XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta), s.sq = s.old^2,
                           Omega.inv = Omega.inv/tau^2, sig.sq = 1)
       } else {
@@ -646,7 +646,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       }
     } else {
 
-      if (reg == "linear" & m > 1) {
+      if (reg == "linear" & p > 1) {
         uv <- sample.uv(old.v = s.old, sigma.sq.z = 1, Sigma.u.inv = Omega.inv,
                         Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta))
       } else {
