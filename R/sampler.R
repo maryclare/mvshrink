@@ -482,7 +482,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
                      pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL,
-                     reg = "linear", pr.ssqi.V.inv = diag(dim(as.matrix(y))[2]),
+                     reg = "linear", pr.ssqi.V.inv = diag(dim(as.matrix(y)[2])),
                      pr.ssqi.df = dim(as.matrix(y))[2] + 2, str.ssqi = "uns") {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
@@ -495,6 +495,8 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   p <- dim(as.matrix(y))[2]
   y <- c(y)
   null.W <- is.null(W)
+  null.Sigma <- is.null(Sigma)
+  null.sigma.sq <- is.null(sigma.sq)
   if (null.W) {
     W <- matrix(0, nrow = n, ncol = 1)
   }
@@ -515,7 +517,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
     els <- (1 - es^2)*diag(r) + es^2*matrix(1, nrow = r, ncol = r)
   }
-  if (!is.null(Sigma)) {
+  if (!null.Sigma) {
     if (prior != "spn") {
       Omega <- Sigma/els
       # Project Omega back into positive semidefinite cone
@@ -546,8 +548,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       Psi <- Psi.inv <- diag(r*t)
     }
   }
-  null.sigma.sq <- is.null(sigma.sq)
-  if (null.sigma.sq & reg == "linear") {
+  if (null.sigma.sq & reg == "linear" & p > 1) {
     sigma.sq <- diag(p)
     sigma.sq.inv <- solve(sigma.sq)
   } else if (null.sigma.sq | reg == "logit") {
@@ -624,7 +625,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
                           Omega.inv = Omega.inv/tau^2, sig.sq = sigma.sq)
       }
       if (prior == "sng") {
-        s <- sqrt(samp.s.sq(beta = c(beta), Omega.inv = Omega.inv, c = c,
+        s <- sqrt(samp.s.sq(beta = beta, Omega.inv = Omega.inv, c = c,
                             d = c, s.sq = s.old^2))
       } else if (prior == "spb") {
         s <- sqrt(samp.s.sq.bridge(beta, Omega.inv = Omega.inv/tau^2, q = q,
@@ -636,7 +637,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       if (is.null(Sigma)) {
         Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r),
                                     pr.V.inv = pr.V.inv,
-                                    pr.df = pr.df, str = str)
+                                    pr.df = pr.df)
         Omega <- solve(Omega.inv)
         if (i > burn.in & (i - burn.in)%%thin == 0) {
           Sigmas[(i - burn.in)/thin, , ] <- Omega*els
@@ -656,7 +657,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
       beta <- uv[, 1]*uv[, 2]
       s <- uv[, 2]
 
-      if (is.null(Sigma)) {
+      if (null.Sigma) {
         Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r), str = str,
                                     pr.V.inv = pr.V.inv,
                                     pr.df = pr.df)
