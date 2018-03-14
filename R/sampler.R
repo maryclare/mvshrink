@@ -1,6 +1,7 @@
 library(GIGrvg) # Much better than generalized hyperbolic package
 library(coda)
 library(copula)
+library(BayesLogit)
 
 # Need a function to compute the gig mode function
 #' @export
@@ -424,6 +425,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' @param pr.shape prior shape parameter for inverse-gamma prior on the noise variance, set to 3/2 by default
 #' @param pr.rate prior rate parameter for inverse-gamma prior on the noise variance, set to 1/2 by default
 #' @param W \eqn{n} by \eqn{l} matrix of unpenalized covariates to include in regression
+#' @param reg string equal to "linear" for linear regression, "logit" for logistic regression
 #' @source Based on the material in the working paper "Structured Shrinkage Priors"
 #' @examples
 #'
@@ -476,7 +478,8 @@ sample.uv <- function(old.v, sigma.sq.z,
 mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m = 2,
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
-                     pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL) {
+                     pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL,
+                     reg = "linear") {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
   # correlation along r dimension
@@ -546,7 +549,7 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
   }
   null.sigma.sq <- is.null(sigma.sq)
-  if (null.sigma.sq) {
+  if (null.sigma.sq | reg == "logit") {
     sigma.sq <- 1
   }
 
@@ -557,11 +560,23 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   sigma.sqs <- numeric(num.samp)
   s.old <- rep(1, ncol(Z))
   beta <- rep(0, ncol(Z))
-  delta <- rep(0, ncol(W))
+  delta <- rep(0, l)
+  # Starting value for logistic regression scales
+  if (reg == "logit") {
+    ome <- rep(1, n)
+  }
 
   for (i in 1:(burn.in + thin*num.samp)) {
 
     if (print.iter) {cat("i=", i, "\n")}
+
+    if (reg == "logit") {
+      ZtZ <- crossprod(Z, crossprod(diag(ome), Z))
+      Zty <- crossprod(Z, y - rep(1/2, n))
+      WtW <- as.matrix(crossprod(W, crossprod(diag(ome), W)))
+      ZtW <- as.matrix(crossprod(Z, crossprod(diag(ome), W))); WtZ <- t(ZtW)
+      Wty <- as.matrix(crossprod(W, y - rep(1/2, n)))
+    }
 
     if (!null.W) {
       delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
@@ -619,8 +634,13 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
 
     if (null.sigma.sq) {
-      res <- y - crossprod(t(Z), beta) - crossprod(t(W), delta)
-      sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
+      fit <- crossprod(t(Z), beta) + crossprod(t(W), delta)
+      res <- y - fit
+      if (reg == "linear") {
+        sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
+      } else if (reg == "logit") {
+        ome <- rpg(fit, rep(1, length(fit)), fit)
+      }
     }
 
     s.old <- s
