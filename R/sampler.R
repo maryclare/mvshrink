@@ -1,4 +1,4 @@
-library(GIGrvg) # Much better than generalized hyperbolic pacakge
+library(GIGrvg) # Much better than generalized hyperbolic package
 library(coda)
 library(copula)
 
@@ -186,8 +186,12 @@ rgigrt <- function(p, lambda, chi, psi, upper) {
 samp.beta <- function(XtX, Xty, s.sq, Omega.inv, sig.sq) {
   V.inv <- XtX/sig.sq + Omega.inv*tcrossprod(1/sqrt(s.sq))
   V.inv.eig <- eigen(V.inv/2 + t(V.inv)/2)
-  V.rt <- tcrossprod(tcrossprod(V.inv.eig$vectors, diag(sqrt(ifelse(1/V.inv.eig$values > 0, 1/V.inv.eig$values, 0)))), V.inv.eig$vectors)
-  V <- tcrossprod(tcrossprod(V.inv.eig$vectors, diag(ifelse(1/V.inv.eig$values > 0, 1/V.inv.eig$values, 0))), V.inv.eig$vectors)
+  V.rt <- tcrossprod(tcrossprod(V.inv.eig$vectors,
+                                diag(sqrt(ifelse(1/V.inv.eig$values > 0, 1/V.inv.eig$values, 0)), nrow = length(V.inv.eig$values), ncol = length(V.inv.eig$values))),
+                     V.inv.eig$vectors)
+  V <- tcrossprod(tcrossprod(V.inv.eig$vectors,
+                             diag(ifelse(1/V.inv.eig$values > 0, 1/V.inv.eig$values, 0), nrow = length(V.inv.eig$values), ncol = length(V.inv.eig$values))),
+                  V.inv.eig$vectors)
   m <- crossprod(V, Xty/sig.sq)
   return(m + V.rt%*%rnorm(length(s.sq)))
 }
@@ -419,6 +423,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' @param pr.df prior degrees of freedom for inverse-Wishart prior, set by default to \eqn{p + 2}, if a diagonal \eqn{\Sigma} is used provide the shape parameter for the inverse-gamma priors on the diagonal elements of \eqn{\Sigma}, if \eqn{\Sigma \propto I_r} is used provide the shape parameter for the inverse-gamma prior on the scale divided by r
 #' @param pr.shape prior shape parameter for inverse-gamma prior on the noise variance, set to 3/2 by default
 #' @param pr.rate prior rate parameter for inverse-gamma prior on the noise variance, set to 1/2 by default
+#' @param W \eqn{n} by \eqn{l} matrix of unpenalized covariates to include in regression
 #' @source Based on the material in the working paper "Structured Shrinkage Priors"
 #' @examples
 #'
@@ -471,7 +476,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m = 2,
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
-                     pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2) {
+                     pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL) {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
   # correlation along r dimension
@@ -479,12 +484,16 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   n <- dim(X)[1]
   t <- dim(X)[2]
   r <- dim(X)[3]
+  l <- dim(W)[2]
 
   # Set up data
   Z <- t(apply(X, 1, "c"))
 
   ZtZ <- crossprod(Z)
   Zty <- crossprod(Z, y)
+  WtW <- as.matrix(crossprod(W))
+  ZtW <- as.matrix(crossprod(Z, W)); WtZ <- t(ZtW)
+  Wty <- as.matrix(crossprod(W, y))
 
   # Transform Sigma to Omega, prep parameters for different priors
   if (prior != "spn") {
@@ -536,18 +545,27 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
   if (null.sigma.sq) {
     sigma.sq <- 1
   }
+
+  deltas <- matrix(nrow = num.samp, ncol = ncol(W))
   betas <- matrix(nrow = num.samp, ncol = ncol(Z))
   ss <- matrix(1, nrow = num.samp, ncol = ncol(Z))
   Sigmas <- array(NA, dim = c(num.samp, r, r))
   sigma.sqs <- numeric(num.samp)
   s.old <- rep(1, ncol(Z))
+  beta <- rep(0, ncol(Z))
 
   for (i in 1:(burn.in + thin*num.samp)) {
 
     if (print.iter) {cat("i=", i, "\n")}
 
+
+    delta <- samp.beta(XtX = WtW, Xty = Wty - crossprod(t(WtZ), beta), s.sq = rep(1, l),
+                      Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
+
+
     if (prior != "spn") {
-      beta <- samp.beta(XtX = ZtZ, Xty = Zty, s.sq = s.old^2,
+
+      beta <- samp.beta(XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta), s.sq = s.old^2,
                         Omega.inv = Omega.inv/tau^2, sig.sq = sigma.sq)
       if (prior == "sng") {
         s <- sqrt(samp.s.sq(beta = beta, Omega.inv = Omega.inv, c = c,
@@ -571,8 +589,9 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
         Omega.inv <- Omega.inv%x%diag(t)   # There isn't a way around doing this directly
       }
     } else {
+
       uv <- sample.uv(old.v = s.old, sigma.sq.z = sigma.sq, Sigma.u.inv = Omega.inv,
-                      Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty)
+                      Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta))
       beta <- uv[, 1]*uv[, 2]
       s <- uv[, 2]
 
@@ -594,19 +613,21 @@ mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m
     }
 
     if (null.sigma.sq) {
-      res <- y - crossprod(t(Z), beta)
+      res <- y - crossprod(t(Z), beta) - crossprod(t(W), delta)
       sigma.sq <- 1/rgamma(1, shape = pr.shape + length(res)/2, rate = pr.rate + sum(res^2)/2)
     }
 
     s.old <- s
     if (i > burn.in & (i - burn.in)%%thin == 0) {
       betas[(i - burn.in)/thin, ] <- beta
+      deltas[(i - burn.in)/thin, ] <- delta
       ss[(i - burn.in)/thin, ] <- s
       sigma.sqs[(i - burn.in)/thin] <- sigma.sq
     }
   }
 
-  return(list("betas" = betas, "ss" = ss, "Sigmas" = Sigmas, "sigma.sqs" = sigma.sqs))
+  return(list("betas" = betas, "ss" = ss, "Sigmas" = Sigmas, "sigma.sqs" = sigma.sqs,
+              "deltas" = deltas))
 
 }
 

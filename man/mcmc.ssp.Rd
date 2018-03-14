@@ -43,6 +43,8 @@ samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior =
 \item{pr.shape}{prior shape parameter for inverse-gamma prior on the noise variance, set to 3/2 by default}
 
 \item{pr.rate}{prior rate parameter for inverse-gamma prior on the noise variance, set to 1/2 by default}
+
+\item{W}{\eqn{n} by \eqn{l} matrix of unpenalized covariates to include in regression}
 }
 \description{
 Function for sampling values of \eqn{beta} and possibly \eqn{Sigma} from the posterior distribution under multivariate normal, structured normal-gamma, structured power/bridge and structured product normal priors
