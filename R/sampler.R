@@ -478,7 +478,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' image(matrix(rowMeans(apply(spb.vs$Sigmas, 1, function(x) {cov2cor(x)})), nrow = r, ncol = r)[r:1, r:1], breaks = breaks, col = cols, main = "SPB")
 #'
 #' @export
-mcmc.ssp <- function(X, y, Sigma, sigma.sq, prior = "sng", c = NULL, q = NULL, m = 2,
+mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NULL, q = NULL, m = 2,
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
                      pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL,
