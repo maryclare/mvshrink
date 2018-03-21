@@ -498,6 +498,9 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
   null.W <- is.null(W)
   null.Sigma <- is.null(Sigma)
   null.sigma.sq <- is.null(sigma.sq)
+  if (!null.sigma.sq) {
+    sigma.sq.inv <- solve(sigma.sq)
+  }
   if (null.W) {
     W <- matrix(0, nrow = n, ncol = 1)
   }
