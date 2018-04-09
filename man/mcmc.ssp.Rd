@@ -24,7 +24,7 @@ samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior =
 
 \item{q}{positive constant, required when "spb" prior is used, default is NULL}
 
-\item{m}{positive constant, determines how \eqn{\Omega} and \eqn{\Psi} are constructed from \eqn{\Psi} when prior="spn" and \eqn{\Sigma} is provided and fixed, sets \eqn{\Psi=|\Sigma|^{1/m}} and \eqn{\Omega=sign(\Sigma)|\Sigma|^{(m - 1)/m}}}
+\item{Psi}{positive semi-definite matrix, used when prior="spn" and \eqn{\Sigma} is provided and fixed}
 
 \item{num.samp}{integer; total number of posterior samples to return, defaults to 100}
 
@@ -46,13 +46,23 @@ samples <- mcmc.ssp(X = X, y = y, Sigma = diag(dim(X)[3]), sigma.sq = 1, prior =
 
 \item{W}{\eqn{n} by \eqn{l} matrix of unpenalized covariates to include in regression}
 
-\item{reg}{string equal to "linear" for linear regression, "logit" for logistic regression}
+\item{reg}{string equal to "linear" for linear regression, "logit" for logistic regression, "nb" for negative binomial regression}
 
 \item{pr.ssqi.V.inv}{If y has matrix structure, this is the scale matrix for an inverse wishart prior on column covariance matrix}
 
 \item{pr.ssqi.df}{If y has matrix structure, this is the scale matrix for an inverse wishart on column covariance matrix}
 
 \item{str.ssqi}{Structure to be used for covariance matrix of columns of Y}
+
+\item{joint.beta}{logical; if TRUE, the function updates all elements of matrix of penalized regression coefficients jointly, otherwise the function updates the matrix of penalized regression coefficients one row at a time, set to TRUE by default}
+
+\item{nb.r}{positive scalar; overdispersion parameter for negative binomial regression, defaults to NULL in which case a gamma prior is assumed for \eqn{r} and values of \eqn{r} are resampled}
+
+\item{pr.nb.r.shape}{positive scalar; shape parameter for gamma prior on \eqn{r}, negative binomial overdisperson parameter. defaults to 1/2}
+
+\item{pr.nb.r.rate}{positive scalar; rate parameter for gamma prior on \eqn{r}, negative binomial overdispersion parameter. defaults to 1/2}
+
+\item{eps}{positive scalar or length p vector; variance for random-walk metropolis-hastings for updating log(r), defaults to 0.5}
 }
 \description{
 Function for sampling values of \eqn{beta} and possibly \eqn{Sigma} from the posterior distribution under multivariate normal, structured normal-gamma, structured power/bridge and structured product normal priors
@@ -70,7 +80,7 @@ y <- t(apply(X, 1, "c"))\%*\%beta + rnorm(n)
 
 # Fit a few models to this data, first fixing Sigma then not
 mvn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "sno")
-spn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spn", m = 2)
+spn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spn", Psi = sqrt(abs(Sigma)))
 sng.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "sng", c = 1)
 spb.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spb", q = 1)
 

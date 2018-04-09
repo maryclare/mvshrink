@@ -1,3 +1,10 @@
+# Need a function to compute log likelihood for s proposals
+#' @export
+cond.nb.s.log <- function(y, nb.s, fit, pr.nb.r.a, pr.nb.r.b) {
+  nb.r <- exp(nb.s)
+  log(choose(y  + nb.r - 1, y)) - nb.r*log(1 + exp(fit)) + pr.nb.r.a*nb.s - pr.nb.r.b*nb.r
+}
+
 # Need a function to compute the gig mode function
 #' @export
 m.fn <- function(alpha, lambda, psi, chi) {
@@ -409,7 +416,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' @param prior string equal to "sno" for multivariate normal prior, "sng" for normal-gamma prior, "spb" for power/bridge prior, "spn" for normal product prior
 #' @param c positive constant, required when "sng" prior is used, default is NULL
 #' @param q positive constant, required when "spb" prior is used, default is NULL
-#' @param m positive constant, determines how \eqn{\Omega} and \eqn{\Psi} are constructed from \eqn{\Psi} when prior="spn" and \eqn{\Sigma} is provided and fixed, sets \eqn{\Psi=|\Sigma|^{1/m}} and \eqn{\Omega=sign(\Sigma)|\Sigma|^{(m - 1)/m}}
+#' @param Psi positive semi-definite matrix, used when prior="spn" and \eqn{\Sigma} is provided and fixed
 #' @param num.samp integer; total number of posterior samples to return, defaults to 100
 #' @param burn.in integer; total number of posterior samples to discard, defaults to 1
 #' @param thin integer; number of posterior samples to be discarded between those returned, defaults to 0
@@ -420,11 +427,15 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' @param pr.shape prior shape parameter for inverse-gamma prior on the noise variance, set to 3/2 by default
 #' @param pr.rate prior rate parameter for inverse-gamma prior on the noise variance, set to 1/2 by default
 #' @param W \eqn{n} by \eqn{l} matrix of unpenalized covariates to include in regression
-#' @param reg string equal to "linear" for linear regression, "logit" for logistic regression
+#' @param reg string equal to "linear" for linear regression, "logit" for logistic regression, "nb" for negative binomial regression
 #' @param pr.ssqi.V.inv If y has matrix structure, this is the scale matrix for an inverse wishart prior on column covariance matrix
 #' @param pr.ssqi.df If y has matrix structure, this is the scale matrix for an inverse wishart on column covariance matrix
 #' @param str.ssqi Structure to be used for covariance matrix of columns of Y
 #' @param joint.beta logical; if TRUE, the function updates all elements of matrix of penalized regression coefficients jointly, otherwise the function updates the matrix of penalized regression coefficients one row at a time, set to TRUE by default
+#' @param nb.r positive scalar; overdispersion parameter for negative binomial regression, defaults to NULL in which case a gamma prior is assumed for \eqn{r} and values of \eqn{r} are resampled
+#' @param pr.nb.r.shape positive scalar; shape parameter for gamma prior on \eqn{r}, negative binomial overdisperson parameter. defaults to 1/2
+#' @param pr.nb.r.rate positive scalar; rate parameter for gamma prior on \eqn{r}, negative binomial overdispersion parameter. defaults to 1/2
+#' @param eps positive scalar or length p vector; variance for random-walk metropolis-hastings for updating log(r), defaults to 0.5
 #' @source Based on the material in the working paper "Structured Shrinkage Priors"
 #' @examples
 #'
@@ -439,7 +450,7 @@ sample.uv <- function(old.v, sigma.sq.z,
 #'
 #' # Fit a few models to this data, first fixing Sigma then not
 #' mvn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "sno")
-#' spn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spn", m = 2)
+#' spn.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spn", Psi = sqrt(abs(Sigma)))
 #' sng.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "sng", c = 1)
 #' spb.fs <- mcmc.ssp(X = X, y = y, Sigma = Sigma, sigma.sq = 1, prior = "spb", q = 1)
 #'
@@ -474,39 +485,50 @@ sample.uv <- function(old.v, sigma.sq.z,
 #' image(matrix(rowMeans(apply(spb.vs$Sigmas, 1, function(x) {cov2cor(x)})), nrow = r, ncol = r)[r:1, r:1], breaks = breaks, col = cols, main = "SPB")
 #'
 #' @export
-mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NULL, q = NULL, m = 2,
+mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NULL, q = NULL, Psi = NULL,
                      num.samp = 100, burn.in = 0, thin = 1, print.iter = FALSE, str = "uns",
                      pr.V.inv = diag(dim(X)[3]),
                      pr.df = dim(X)[3] + 2, pr.shape = 3/2, pr.rate = 1/2, W = NULL,
                      reg = "linear", pr.ssqi.V.inv = diag(dim(as.matrix(y))[2]),
                      pr.ssqi.df = dim(as.matrix(y))[2] + 2, str.ssqi = "uns",
-                     joint.beta = TRUE) {
+                     joint.beta = TRUE, nb.r = NULL, pr.nb.r.shape = 1/2, pr.nb.r.rate = 1/2, eps = 0.5) {
 
   # X can be an n \times t \times r array, in which case beta is t \times r, allow unstructured
   # correlation along r dimension
   pr.ssqi.V.inv <- pr.ssqi.V.inv # Weirdly this is needed here to "initialize" pr.ssqi.V.inv before making y a vector
+  if (length(eps) == 1 & !is.null(ncol(y))) {
+    eps <- rep(eps, ncol(y))
+  }
 
   n <- dim(X)[1]
   t <- dim(X)[2]
   r <- dim(X)[3]
   m <- dim(as.matrix(y))[1]
   p <- dim(as.matrix(y))[2]
+  y.mat <- matrix(y, nrow = m, ncol = p)
   y <- c(y)
   null.W <- is.null(W)
   null.Sigma <- is.null(Sigma)
   null.sigma.sq <- is.null(sigma.sq)
+  null.nb.r <- is.null(nb.r)
+  if (null.nb.r) {
+    nb.r <- rep(1, p)
+  }
   if (!null.sigma.sq) {
     sigma.sq.inv <- solve(sigma.sq)
   }
   if (null.W) {
-    W <- matrix(0, nrow = n, ncol = 1)
+    W <- Matrix(0, nrow = n, ncol = 1)
+  } else {
+    W <- Matrix(W, sparse = TRUE)
   }
-  if (reg == "logistic") {
+  if (reg == "logit") {
     offset <- rep(1/2, n)
+  } else if (reg == "nb") {
+    offset <- (y + nb.r%x%rep(1, m))/2
   } else {
     offset <- rep(0, n)
   }
-
   l <- dim(W)[2]
 
   # Transform Sigma to Omega, prep parameters for different priors
@@ -537,7 +559,11 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
         Omega.inv <- Omega.inv%x%diag(t)   # There isn't a way around doing this directly
       }
     } else {
-      Omega <- abs(Sigma)^(1/m)
+      if (is.null(Psi)) {
+        Psi <- sign(Sigma)*abs(Sigma)^(1/2)
+      }
+      Omega <- (Sigma/Psi)
+      Omega[Psi == 0] <- 0
       Omega.eig <- eigen(Omega)
       Omega.inv <- tcrossprod(tcrossprod(Omega.eig$vectors, diag(ifelse(Omega.eig$values > 0, 1/Omega.eig$values, 0))), Omega.eig$vectors)
       if (joint.beta) {
@@ -545,7 +571,6 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
         Omega.inv <- Omega.inv%x%diag(t)   # There isn't a way around doing this directly
       }
 
-      Psi <- sign(Sigma)*abs(Sigma)^((m - 1)/m)
       Psi.eig <- eigen(Psi)
       Psi.inv <- tcrossprod(tcrossprod(Psi.eig$vectors, diag(ifelse(Psi.eig$values > 0, 1/Psi.eig$values, 0))), Psi.eig$vectors)
       if (joint.beta) {
@@ -571,7 +596,7 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
   if (null.sigma.sq & reg == "linear" & p > 1) {
     sigma.sq <- diag(p)
     sigma.sq.inv <- solve(sigma.sq)
-  } else if (null.sigma.sq | reg == "logit") {
+  } else if (null.sigma.sq | reg == "logit" | reg == "nb") {
     sigma.sq <- 1
   }
 
@@ -591,15 +616,15 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
 
     for (i in 1:num.block) {
       Zty[i, ] <- crossprod(Z[, i, ], crossprod(sigma.sq.inv%x%diag(m), y))[, 1]
-      ZtW[i, , ] <- crossprod(Z[, i, ], crossprod(sigma.sq.inv%x%diag(m), W))
+      ZtW[i, , ] <- as.matrix(Matrix::crossprod(Z[, i, ], Matrix::crossprod(sigma.sq.inv%x%diag(m), W)))
       WtZ[i, , ] <- t(ZtW[i, , ])
       for (j in 1:num.block) {
         ZtZ[i, j, , ] <- crossprod(Z[, i, ], crossprod(sigma.sq.inv%x%diag(m), Z[, j, ]))
       }
     }
 
-    Wty <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), y)))
-    WtW <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), W)))
+    Wty <- as.matrix(Matrix::crossprod(W, Matrix::crossprod(sigma.sq.inv%x%diag(m), y)))
+    WtW <- as.matrix(Matrix::crossprod(W, Matrix::crossprod(sigma.sq.inv%x%diag(m), W)))
   } else {
     ZtZ <- array(dim = c(num.block, num.block, dim(Z)[3], dim(Z)[3]))
     Zty <- array(dim = c(num.block, dim(Z)[3]))
@@ -607,15 +632,18 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
 
     for (i in 1:num.block) {
       Zty[i, ] <- crossprod(Z[, i, ], y - offset)[, 1]
-      ZtW[i, , ] <- crossprod(Z[, i, ],  W)
+
+      ZtW[i, , ] <- as.matrix(Matrix::crossprod(Z[, i, ],  W))
       WtZ[i, , ] <- t(ZtW[i, , ])
       for (j in 1:num.block) {
         ZtZ[i, j, , ] <- crossprod(Z[, i, ], Z[, j, ])
       }
     }
-    Wty <- as.matrix(W, y - offset)
-    WtW <- as.matrix(crossprod(W))
+
+    Wty <- as.matrix(Matrix::crossprod(W, as.matrix(y - offset)))
+    WtW <- as.matrix(Matrix::crossprod(W))
   }
+
 
   fits <- matrix(NA, nrow = num.samp, ncol = n)
   deltas <- matrix(0, nrow = num.samp, ncol = ncol(W))
@@ -623,14 +651,18 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
   ss <- matrix(1, nrow = num.samp, ncol = t*r)
   Sigmas <- array(NA, dim = c(num.samp, r, r))
   sigma.sqs <- array(dim = c(num.samp, p, p))
+  nb.rs <- array(dim = c(num.samp, p))
+  acc.rs <- array(dim = c(num.samp, p))
   s.old <- rep(1, t*r)
   s.old.mat <- matrix(s.old, nrow = t, ncol = r)
   beta <- rep(0, t*r)
   beta.mat <- matrix(beta, nrow = t, ncol = r)
   delta <- rep(0, l)
   # Starting value for logistic regression scales
-  if (reg == "logit") {
+  if (reg == "logit" | reg == "nb") {
     ome <- rep(1, n)
+    omeD <- Matrix(0, nrow = n, ncol = n, sparse = TRUE)
+    diag(omeD) <- ome
   }
 
   for (i in 1:(burn.in + thin*num.samp)) {
@@ -641,30 +673,31 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
 
       for (k in 1:num.block) {
         Zty[k, ] <- crossprod(Z[, k, ], crossprod(sigma.sq.inv%x%diag(m), y))
-        ZtW[k, , ] <- as.matrix(crossprod(Z[, k, ], crossprod(sigma.sq.inv%x%diag(m), W))); WtZ[k, , ] <- t(ZtW[k, , ])
+        ZtW[k, , ] <- as.matrix(Matrix::crossprod(Z[, k, ], Matrix::crossprod(sigma.sq.inv%x%diag(m), W))); WtZ[k, , ] <- t(ZtW[k, , ])
         for (kk in 1:num.block) {
           ZtZ[k, kk, , ] <- crossprod(Z[, k, ], crossprod(sigma.sq.inv%x%diag(m), Z[, kk, ]))
         }
       }
 
-      WtW <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), W)))
-      Wty <- as.matrix(crossprod(W, crossprod(sigma.sq.inv%x%diag(m), y)))
-    } else {
+      WtW <- as.matrix(Matrix::crossprod(W, Matrix::crossprod(sigma.sq.inv%x%diag(m), W)))
+      Wty <- as.matrix(Matrix::crossprod(W, Matrix::crossprod(sigma.sq.inv%x%diag(m), y)))
+    } else if (reg == "logit" | reg == "nb") {
+
       for (k in 1:num.block) {
         Zty[k, ] <- crossprod(Z[, k, ], y - offset)
-        ZtW[k, , ] <- as.matrix(crossprod(Z[, k, ], crossprod(diag(ome), W))); WtZ[k, , ] <- t(ZtW[k, , ])
+        ZtW[k, , ] <- as.matrix(Matrix::crossprod(Z[, k, ], Matrix::crossprod(omeD, W))); WtZ[k, , ] <- t(ZtW[k, , ])
         for (kk in 1:num.block) {
-          ZtZ[k, kk, , ] <- crossprod(Z[, k, ], crossprod(diag(ome), Z[, kk, ]))
+          ZtZ[k, kk, , ] <- as.matrix(Matrix::crossprod(Z[, k, ], Matrix::crossprod(omeD, Z[, kk, ])))
 
         }
       }
-      WtW <- as.matrix(crossprod(W, crossprod(diag(ome), W)))
-      Wty <- as.matrix(crossprod(W, y - offset))
+      WtW <- as.matrix(Matrix::crossprod(W, Matrix::crossprod(omeD, W)))
+      Wty <- as.matrix(Matrix::crossprod(W, as.matrix(y - offset)))
     }
 
     if (!null.W) {
       if (num.block == 1) {
-        Xty <- Wty - crossprod(as.matrix(WtZ[1, , ]), beta)
+        Xty <- Wty - crossprod(t(as.matrix(WtZ[1, , ])), beta)
       } else {
         Xty <- Wty
         for (k in 1:num.block) {
@@ -679,7 +712,6 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
                            Omega.inv = matrix(0, nrow = l, ncol = l), sig.sq = sigma.sq)
       }
     }
-
 
     if (prior != "spn") {
 
@@ -707,7 +739,7 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
           for (k in 1:num.block) {
             XtX <- ZtZ[k, k, , ]
             Xty <- Zty[k, ] - crossprod(t(ZtW[k, , ]), delta)
-            for (kk in (1:num.block)[num.block != k]) {
+            for (kk in (1:num.block)[1:num.block != k]) {
               Xty <- Xty - crossprod(t(ZtZ[k, kk, , ]), beta.mat[kk, ])
             }
             beta.mat[k, ] <- samp.beta(XtX = XtX, Xty = Xty, s.sq = s.old.mat[k, ]^2,
@@ -758,10 +790,10 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
       if (num.block == 1) {
         if (reg == "linear" & p > 1) {
           uv <- sample.uv(old.v = s.old, sigma.sq.z = 1, Sigma.u.inv = Omega.inv,
-                          Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta))
+                          Sigma.v.inv = Psi.inv, XtX = ZtZ[1, 1, , ], Xty = Zty[1, ] - crossprod(t(ZtW[1, , ]), delta))
         } else {
           uv <- sample.uv(old.v = s.old, sigma.sq.z = sigma.sq, Sigma.u.inv = Omega.inv,
-                          Sigma.v.inv = Psi.inv, XtX = ZtZ, Xty = Zty - crossprod(t(ZtW), delta))
+                          Sigma.v.inv = Psi.inv, XtX = ZtZ[1, 1, , ], Xty = Zty[1, ] - crossprod(t(ZtW[1, , ]), delta))
         }
         beta <- uv[, 1]*uv[, 2]
         s <- uv[, 2]
@@ -810,13 +842,14 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
     s.old <- s
 
     if (num.block == 1) {
-      fit <- crossprod(t(Z[, 1, ]), beta) + crossprod(t(W), delta)
+      fit <- crossprod(t(Z[, 1, ]), beta) + as.matrix(Matrix::crossprod(Matrix::t(W), delta))
     } else {
-      fit <- crossprod(t(W), delta)
+      fit <- as.matrix(Matrix::crossprod(Matrix::t(W), delta))
       for (k in 1:num.block) {
         fit <- fit + crossprod(t(Z[, k, ]), beta.mat[k, ])
       }
     }
+    fit.mat <- matrix(fit, nrow = m, ncol = p)
     if (null.sigma.sq & reg == "linear") {
 
       res <- y - fit
@@ -831,21 +864,51 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
       }
     }
 
-    if (reg == "logit") {
-      ome <- BayesLogit::rpg(n, rep(1, n), fit)
+    if (null.nb.r & reg == "nb") {
+
+      acc <- rep(0, p)
+      for (k in 1:p) {
+        nb.s <- log(nb.r[k])
+        nb.s.new <- nb.s + eps[k]*rnorm(1)
+
+        old.lik <- sum(cond.nb.s.log(y = y.mat[, k], nb.s = nb.s, fit = fit.mat[, k], pr.nb.r.a = pr.nb.r.shape, pr.nb.r.b = pr.nb.r.rate))
+        new.lik <- sum(cond.nb.s.log(y = y.mat[, k], nb.s = nb.s.new, fit = fit.mat[, k], pr.nb.r.a = pr.nb.r.shape, pr.nb.r.b = pr.nb.r.rate))
+        ratio <- min(1, exp(new.lik - old.lik))
+        if (runif(1) < ratio) {
+         nb.s <- nb.s.new
+         nb.r[k] <- exp(nb.s)
+         acc[k] <- 1
+        }
+      }
+      offset <- (y + nb.r%x%rep(1, m))/2
+    }
+
+    if (reg == "logit" | reg == "nb") {
+      ome <- BayesLogit::rpg(n, offset*2, fit)
+      diag(omeD) <- ome
     }
 
     if (i > burn.in & (i - burn.in)%%thin == 0) {
       betas[(i - burn.in)/thin, ] <- beta
       deltas[(i - burn.in)/thin, ] <- delta
       ss[(i - burn.in)/thin, ] <- s
-      fits[(i - burn.in)/thin, ] <- fit
+      if (reg == "linear") {
+        fits[(i - burn.in)/thin, ] <- fit
+      } else if (reg == "logit") {
+        fits[(i - burn.in)/thin, ] <- exp(fit)/(1 + exp(fit))
+      } else {
+        fits[(i - burn.in)/thin, ] <- exp(as.numeric(fit) + log(nb.r%x%rep(1, m)))
+      }
       sigma.sqs[(i - burn.in)/thin, , ] <- sigma.sq
+      nb.rs[(i - burn.in)/thin, ] <- nb.r
+      if (null.nb.r & reg == "nb") {
+        acc.rs[(i - burn.in)/thin, ] <- acc
+      }
     }
   }
 
   return(list("betas" = betas, "ss" = ss, "Sigmas" = Sigmas, "sigma.sqs" = sigma.sqs,
-              "deltas" = deltas, "fits" = fits))
+              "deltas" = deltas, "fits" = fits, "rs" = nb.rs, "acc.rs" = acc.rs))
 
 }
 
