@@ -697,7 +697,7 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
 
     if (!null.W) {
       if (num.block == 1) {
-        Xty <- Wty - crossprod(t(as.matrix(WtZ[1, , ])), beta)
+        Xty <- Wty - crossprod(as.matrix(WtZ[1, , ]), beta)
       } else {
         Xty <- Wty
         for (k in 1:num.block) {
@@ -777,7 +777,7 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
       if (null.Sigma) {
         Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r),
                                     pr.V.inv = pr.V.inv,
-                                    pr.df = pr.df)
+                                    pr.df = pr.df, str = str)
         Omega <- solve(Omega.inv)
         Sigmas[(i - burn.in)/thin, , ] <- Omega*els
         if (num.block == 1) {
@@ -821,7 +821,8 @@ mcmc.ssp <- function(X, y, Sigma = NULL, sigma.sq = NULL, prior = "sng", c = NUL
       }
 
       if (null.Sigma) {
-        Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r), str = str,
+        Omega.inv <- samp.Omega.inv(Beta = matrix(beta, nrow = t, ncol = r)/matrix(s, nrow = t, ncol = r),
+                                    str = str,
                                     pr.V.inv = pr.V.inv,
                                     pr.df = pr.df)
         Omega <- solve(Omega.inv)
